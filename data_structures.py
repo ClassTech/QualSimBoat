@@ -45,12 +45,10 @@ class VisionData:
     selected_slalom_poles: List[Dict] = field(default_factory=list)
     avoidance_poles: List[Dict] = field(default_factory=list)
 
+# --- MODIFIED ---
+# Simplified to two thrusters for a differential drive boat
 @dataclass
 class ThrusterCommands:
-    h_port_bow: float = 0.0
-    h_starboard_bow: float = 0.0
-    h_port_aft: float = 0.0
-    h_starboard_aft: float = 0.0
-    v_bow: float = 0.0
-    v_aft: float = 0.0
+    port: float = 0.0
+    starboard: float = 0.0
     pause_simulation: bool = False

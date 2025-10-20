@@ -3,9 +3,10 @@
 Contains all constants, tuning parameters, and configuration classes for the simulation.
 """
 from dataclasses import dataclass
+from typing import Tuple
 
 # --- Constants and Configuration ---
-# Color constants for drawing
+# --- MODIFIED: Added GREEN to the import ---
 WHITE, BLACK, BLUE, LIGHT_BLUE = (255, 255, 255), (0, 0, 0), (20, 50, 120), (100, 150, 200)
 RED, GREEN, YELLOW, GRAY = (255, 0, 0), (50, 200, 50), (255, 255, 0), (128, 128, 128)
 ORANGE = (255, 165, 0)
@@ -18,6 +19,10 @@ MAGENTA = (255, 0, 255)
 RED_HSV_RANGES = [((0, 40, 40), (15, 100, 100)), ((340, 40, 40), (360, 100, 100))]
 BLACK_HSV_RANGE = [((0, 0, 0), (360, 100, 30))]
 WHITE_HSV_RANGE = [((0, 0, 70), (360, 25, 100))]
+GRAY_HSV_RANGE = [((0, 0, 40), (360, 20, 70))]
+# --- NEW: HSV Range for the green marker ---
+GREEN_HSV_RANGE = [((100, 40, 40), (140, 100, 100))]
+
 
 @dataclass
 class SimulationConfig:
@@ -27,3 +32,27 @@ class SimulationConfig:
     cameraFov: float = 70.0
     submarineWidth: float = 0.46
     submarineLength: float = 0.457
+
+# --- Pre-Qualification Course Configuration ---
+@dataclass
+class PrequalConfig:
+    # 1. Gate
+    GATE_WIDTH_METERS: float = 2.0      # 6.6 ft
+    GATE_DEPTH_METERS: float = 1.0      # 3.3 ft below surface
+    GATE_OPENING_HEIGHT: float = 1.5    # Your choice, 1.5m
+    GATE_COLOR: Tuple[int, int, int] = (255, 0, 0) # RED
+    
+    # 2. Marker
+    MARKER_DIAMETER_METERS: float = 0.3 # Your choice
+    MARKER_COLOR: Tuple[int, int, int] = GREEN # <-- Use constant
+    
+    # 3. Layout (in meters)
+    GATE_X_POS: float = 10.0
+    MARKER_X_POS: float = GATE_X_POS + 10.0 # 33 ft beyond
+    
+    # 4. Starting Position
+    START_X_POS: float = 3.0
+    START_Z_POS: float = 0.1 # Start on the surface
+    
+    # 5. Pole Extension
+    POLE_ABOVE_SURFACE_METERS: float = 0.6096

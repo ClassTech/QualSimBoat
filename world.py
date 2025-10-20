@@ -5,6 +5,27 @@ Contains definitions for all physical objects in the simulation world.
 from dataclasses import dataclass
 from typing import Tuple
 
+# --- NEW: Pre-Qualification Course Objects ---
+@dataclass
+class PrequalGate:
+    x: float
+    center_y: float
+    z_top: float      # Z-position of the top of the gate (e.g., 1.0m)
+    width: float      # Width of the opening (e.g., 2.0m)
+    height: float     # Height of the opening (e.g., 1.5m)
+    color: Tuple[int, int, int]
+
+@dataclass
+class PrequalMarker:
+    x: float
+    y: float
+    z_top: float      # Z-position of the top (e.g., 0.0m)
+    z_bottom: float   # Z-position of the bottom (e.g., 2.1m)
+    radius: float
+    color: Tuple[int, int, int]
+
+
+# --- Old Competition Objects (no longer used) ---
 @dataclass
 class Gate:
     x: float

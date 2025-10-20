@@ -18,7 +18,7 @@ class StabilizeTask(Task):
     def reset(self):
         self.state_timer = 0.0
         self.target_set = False
-        self.target_depth = 0.0
+        # --- REMOVED target_depth ---
 
     @property
     def state_name(self) -> str:
@@ -34,10 +34,8 @@ class StabilizeTask(Task):
             sub.target_x, sub.target_y = sensors.x, sensors.y
             sub.target_heading = sensors.heading
             sub.target_pitch = 0.0
-            # CORRECTED: Resetting the integral terms prevents the sub from backing up
-            # due to accumulated error from the previous task.
             sub.integral_x_err, sub.integral_y_err = 0.0, 0.0
-            self.target_depth = sensors.depth
+            # --- REMOVED target_depth ---
             self.target_set = True
 
         self.state_timer += dt
@@ -46,7 +44,8 @@ class StabilizeTask(Task):
 
         # Task is complete if the timer has run down AND we are slow enough
         if self.state_timer > self.STABILIZE_DURATION and speed < self.SPEED_THRESHOLD:
-            return TaskStatus.COMPLETED, sub._get_damping_commands(sensors, self.target_depth)
+            # --- MODIFIED: Removed target_depth ---
+            return TaskStatus.COMPLETED, sub._get_damping_commands(sensors)
 
-        # Actively hover at the locked position to ensure a full stop
-        return TaskStatus.RUNNING, sub._get_pid_hover_commands(sensors, dt, sub.target_x, sub.target_y, self.target_depth)
+        # --- MODIFIED: Removed target_depth ---
+        return TaskStatus.RUNNING, sub._get_pid_hover_commands(sensors, dt, sub.target_x, sub.target_y)
