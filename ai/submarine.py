@@ -11,8 +11,7 @@ from config import SimulationConfig
 from utils import angle_diff
 from ai.tasks import TaskStatus # Corrected import
 from ai.tasks.task_base import Task
-from ai.tasks.hover_task import HoverTask # Keep if needed, though Stabilize exists
-# from ai.tasks.slalom_task import SlalomTask # Remove if not used
+
 
 
 class Submarine:

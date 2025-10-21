@@ -92,7 +92,7 @@ class Task:
 
         elif subtask_status == SubtaskStatus.FAILED:
             # (Failure logic remains the same - propagate up)
-            print(f"ERROR: Subtask {current_subtask.name} FAILED in task {self.__class__.__name__}")
+        #    print(f"ERROR: Subtask {current_subtask.name} FAILED in task {self.__class__.__name__}")
             current_subtask.on_exit(sub, sensors, processed_vision_data, self.context)
             return TaskStatus.FAILED, sub._get_damping_commands(sensors)
 
