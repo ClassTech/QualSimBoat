@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Refactored Gate task using reusable subtasks.
+Refactored Gate task using reusable subtasks. Includes stabilization after alignment.
 """
 import math
 from typing import Tuple, List
@@ -9,6 +9,7 @@ import numpy as np
 
 from ai.tasks.task_base import Task, TaskStatus
 from ai.tasks.subtask_base import Subtask, SubtaskStatus
+# Import Stabilize from common_subtasks
 from ai.tasks.common_subtasks import (WaitForTargetVisible, AlignToObjectX, DriveStraight,
                                       Stabilize, DriveUntilTargetLost)
 
@@ -26,15 +27,19 @@ class GateTask(Task):
         self.gate_vision_data.align_target_center_x = None
         self.gate_vision_data.gate_is_visible = False
 
+        # --- MODIFIED: Added Stabilize after AlignToObjectX ---
         self.subtasks = [
             WaitForTargetVisible(), # Wait to see the gate
-            AlignToObjectX(target_x_fraction=0.5, tolerance_px=10, yaw_gain=0.6, yaw_rate_tolerance=0.05), # Align
+            AlignToObjectX(target_x_fraction=0.5,
+                           tolerance_px=10,
+                           yaw_gain=1.5, # Keep increased gain
+                           yaw_rate_tolerance=0.05), # Align center
+            Stabilize(duration=1.0, speed_threshold=0.1), # Stabilize briefly after aligning
             DriveUntilTargetLost(surge_power=0.6), # Drive forward WHILE gate is visible
-            # --- MODIFIED: Increased Duration ---
-            DriveStraight(duration=4.0, surge_power=0.6), # Was 2.0 seconds
-            # ---
-            Stabilize(duration=1.0) # Optional: Stabilize briefly after passing
+            DriveStraight(duration=4.0, surge_power=0.6), # Drive straight AFTER losing sight
+            Stabilize(duration=1.0) # Optional: Stabilize after fully passing
         ]
+        # ---
 
         super().__init__()
         self.reset()
