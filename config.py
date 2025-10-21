@@ -19,7 +19,10 @@ MAGENTA = (255, 0, 255)
 RED_HSV_RANGES = [((0, 40, 40), (15, 100, 100)), ((340, 40, 40), (360, 100, 100))]
 BLACK_HSV_RANGE = [((0, 0, 0), (360, 100, 30))]
 WHITE_HSV_RANGE = [((0, 0, 70), (360, 25, 100))]
-GRAY_HSV_RANGE = [((0, 0, 40), (360, 20, 70))]
+#GRAY_HSV_RANGE = [((0, 0, 40), (360, 20, 70))]
+# --- VERY WIDE GRAY Range (for testing) ---
+# Any Hue, Low Saturation, Wide Value range
+GRAY_HSV_RANGE = [((0, 0, 20), (360, 50, 90))] # Was S:0-35, V:30-80
 # --- NEW: HSV Range for the green marker ---
 GREEN_HSV_RANGE = [((100, 40, 40), (140, 100, 100))]
 
