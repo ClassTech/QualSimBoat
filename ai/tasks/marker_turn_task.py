@@ -128,8 +128,8 @@ class MarkerTurnTask(Task):
         # --- MODIFICATION: Changed end fraction back to 100% ---
         self.ORBIT_END_X_FRACTION = 1.2   # Was 0.9
         # ---
-        self.ORBIT_SURGE_POWER = 0.30    # Constant surge during orbit
-        self.ORBIT_YAW_GAIN = 3.0
+        self.ORBIT_SURGE_POWER = 0.20    # Constant surge during orbit
+        self.ORBIT_YAW_GAIN = 3.5
         self.ORBIT_COMPLETION_ANGLE_DEG = 130.0
         
         # (Removed all approach/height parameters)
