@@ -14,13 +14,15 @@ from ai.tasks.common_subtasks import (WaitForTargetVisible, AlignToObjectX, Driv
                                       Stabilize, DriveUntilTargetLost)
 
 from data_structures import SensorSuite, VisionData, ThrusterCommands
-from config import SimulationConfig, GRAY_HSV_RANGE
+# --- MODIFICATION: Import RED_HSV_RANGES instead of GRAY_HSV_RANGE ---
+from config import SimulationConfig, RED_HSV_RANGES # Was GRAY_HSV_RANGE
 from utils import angle_diff
 from ai.vision import find_blobs_hsv
+# --- THE PROBLEMATIC IMPORT 'from ai.submarine import Submarine' IS REMOVED ---
 
 
 class GateTask(Task):
-    """Navigates through the gate defined by two gray poles."""
+    """Navigates through the gate defined by two red poles."""
 
     def __init__(self, target_depth: float = 0.1):
         self.gate_vision_data = VisionData()
@@ -46,11 +48,13 @@ class GateTask(Task):
 
     # (process_vision method remains the same)
     def process_vision(self, sub: 'Submarine', camera_image: pygame.Surface) -> VisionData:
-        gray_blobs = find_blobs_hsv(camera_image, GRAY_HSV_RANGE, 50)
+        # --- MODIFICATION: Use RED_HSV_RANGES and update variable name ---
+        red_blobs = find_blobs_hsv(camera_image, RED_HSV_RANGES, 50) # Was GRAY_HSV_RANGE
         self.gate_vision_data.gate_is_visible = False
         self.gate_vision_data.align_target_center_x = None
-        if len(gray_blobs) >= 2:
-            potential_poles = [b for b in gray_blobs if b['height'] > b['width'] * 1.5]
+        if len(red_blobs) >= 2: # Was gray_blobs
+            potential_poles = [b for b in red_blobs if b['height'] > b['width'] * 1.5] # Was gray_blobs
+            # ---
             if len(potential_poles) >= 2:
                 potential_poles.sort(key=lambda p: p['center_x'])
                 best_pair, min_height_diff = None, float('inf')

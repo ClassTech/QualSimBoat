@@ -94,25 +94,16 @@ class AlignToObjectX(Subtask):
         yaw_d = -sensors.imu.gyro_z * sub.YAW_D_GAIN
         yaw = np.clip(yaw_p + yaw_d, -1.0, 1.0)
 
-        # --- DEBUG PRINTS ---
-        # print(f"AlignToObjectX: TargetPx={target_pixel_x:.1f}, CurrentPx={current_center_x:.1f}, ErrorPx={pixel_error_x:.1f}, YawCmd={yaw:.2f}")
-        # ---
-
         is_centered = abs(pixel_error_x) < self.tolerance_px
         is_stable = abs(sensors.imu.gyro_z) < self.yaw_rate_tolerance
 
         if is_centered and is_stable:
-             # print("AlignToObjectX: COMPLETED") # Debug
              return SubtaskStatus.COMPLETED, sub._get_damping_commands(sensors)
 
         return SubtaskStatus.RUNNING, sub._mix_and_normalize_commands(0.0, 0.0, yaw) # Pivot command
 
     def on_exit(self, sub: 'Submarine', sensors: SensorSuite, vision_data: VisionData, context: Dict[str, Any]):
-        # Store heading only on successful completion? Task base calls on_exit always.
-        # Check if the last status was COMPLETED? Requires storing status.
-        # For now, assume on_exit means successful alignment for context.
         context['initial_heading'] = sensors.heading
-        # print(f"DEBUG: Stored initial_heading={context.get('initial_heading')} on AlignToObjectX exit.")
 
 
 class ApproachTargetVisualWidth(Subtask): # ... as before, robust version ...
@@ -147,3 +138,73 @@ class DriveUntilTargetLost(Subtask): # ... as before ...
         else:
             if self.target_was_visible: return SubtaskStatus.COMPLETED, sub._get_damping_commands(sensors)
             else: print("ERROR: DriveUntilTargetLost started but target not initially visible."); return SubtaskStatus.FAILED, sub._get_damping_commands(sensors)
+
+# --- MODIFIED SUBTASK: Uses HEIGHT for distance control ---
+class ApproachAndCenterObject(Subtask):
+    """
+    Surges and steers to center an object (50%) based on its visual HEIGHT.
+    Uses a P-controller on surge to slow down as it approaches the target height.
+    Completes when height is within tolerance.
+    """
+    def __init__(self, 
+                 height_threshold_px: int, 
+                 surge_p_gain: float = 0.1, 
+                 height_tolerance_px: int = 5,
+                 yaw_gain: float = 1.5,
+                 lost_timeout: float = 2.0):
+        self.height_threshold = height_threshold_px
+        self.surge_p_gain = surge_p_gain
+        self.height_tolerance = height_tolerance_px
+        self.yaw_gain = yaw_gain
+        self.lost_timeout = lost_timeout
+        self.time_since_target_lost = 0.0
+
+    def on_enter(self, sub: 'Submarine', sensors: SensorSuite, vision_data: VisionData, context: Dict[str, Any]):
+        self.time_since_target_lost = 0.0
+        context['initial_heading'] = sensors.heading
+
+    def execute(self, sub: 'Submarine', dt: float, sensors: SensorSuite, vision_data: VisionData, config: SimulationConfig, context: Dict[str, Any]) -> Tuple[SubtaskStatus, ThrusterCommands]:
+        # --- MODIFICATION: Use 'apparent_height' not 'align_target_width' ---
+        target_height = getattr(vision_data, 'apparent_height', None)
+        target_center_x = getattr(vision_data, 'align_target_center_x', None)
+
+        if target_height is not None and target_center_x is not None:
+            # --- Target is visible ---
+            self.time_since_target_lost = 0.0
+            
+            # --- SURGE P-Controller (slows as it approaches) ---
+            height_error = self.height_threshold - target_height
+            surge = height_error * self.surge_p_gain
+            surge = np.clip(surge, -0.4, 0.5) # Max 0.5 forward, 0.4 reverse
+            
+            # --- YAW P-Controller (steers to center) ---
+            cam_w, _ = sensors.camera_image.get_size()
+            pixel_error_x = target_center_x - (cam_w / 2)
+            yaw_p = -(pixel_error_x / (cam_w / 2)) * self.yaw_gain
+            yaw_d = -sensors.imu.gyro_z * sub.YAW_D_GAIN
+            yaw = np.clip(yaw_p + yaw_d, -1.0, 1.0)
+
+            # --- Check for completion ---
+            is_at_dist = abs(height_error) < self.height_tolerance
+            is_centered = abs(pixel_error_x) < 15 # 15px tolerance for center
+            
+            if is_at_dist and is_centered:
+                context['initial_heading'] = sensors.heading
+                return SubtaskStatus.COMPLETED, sub._get_damping_commands(sensors)
+            
+            # Not complete, so continue approaching
+            return SubtaskStatus.RUNNING, sub._mix_and_normalize_commands(surge, 0.0, yaw)
+            
+        else:
+            # --- Target is lost ---
+            self.time_since_target_lost += dt
+            if self.time_since_target_lost > self.lost_timeout:
+                print(f"ERROR: ApproachAndCenterObject failed - target lost for > {self.lost_timeout}s")
+                return SubtaskStatus.FAILED, sub.get_spin_damping_commands(sensors)
+            
+            # Target lost, just damp spin and wait to reacquire
+            return SubtaskStatus.RUNNING, sub.get_spin_damping_commands(sensors)
+
+    def on_exit(self, sub: 'Submarine', sensors: SensorSuite, vision_data: VisionData, context: Dict[str, Any]):
+        # Store the final heading for the next task
+        context['initial_heading'] = sensors.heading

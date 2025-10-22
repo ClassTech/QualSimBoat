@@ -34,7 +34,11 @@ class SubmarineSimulator:
         self.cameraSurface = pygame.Surface((320, 240))
         try:
             # (Image loading remains the same)
-            bg_img = pygame.image.load("image_9c266f.jpg").convert()
+            # --- MODIFIED: Use your new background image file name ---
+            # Make sure to replace "BackgroundImage.jpg" with the
+            # actual filename you saved in your project directory.
+            bg_img = pygame.image.load("BackgroundImage.jpg").convert()
+            # ---
             h=480; w=int(bg_img.get_width()*(h/bg_img.get_height()))
             self.camera_background = pygame.transform.scale(bg_img, (w,h))
             self.camera_background_pano = pygame.Surface((w*2,h))
@@ -165,8 +169,15 @@ class SubmarineSimulator:
              g = self.prequal_gate; half_w = g.width / 2; z_bottom = g.z_top + g.height
              corners_3d = [(g.x, g.center_y - half_w, g.z_top), (g.x, g.center_y + half_w, g.z_top),(g.x, g.center_y + half_w, z_bottom), (g.x, g.center_y - half_w, z_bottom)]
              proj_corners = [self.project3D(p) for p in corners_3d]
-             if all(proj_corners): points_2d = [p[:2] for p in proj_corners]; avg_dist = sum(p[2] for p in proj_corners) / 4; drawable.append((avg_dist, 'polygon', g.color, points_2d, 5))
-             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = GRAY
+             
+             # --- MODIFICATION: Commented out the submerged gate polygon ---
+             # if all(proj_corners): points_2d = [p[:2] for p in proj_corners]; avg_dist = sum(p[2] for p in proj_corners) / 4; drawable.append((avg_dist, 'polygon', g.color, points_2d, 5))
+             # ---
+             
+             # --- MODIFICATION: Changed pole_color from GRAY to g.color ---
+             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color # Was GRAY
+             # ---
+             
              lp_top = self.project3D((g.x, g.center_y - half_w, pole_z_top)); lp_bot = self.project3D((g.x, g.center_y - half_w, pole_z_bottom))
              if lp_top and lp_bot: avg_dist = (lp_top[2] + lp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, lp_top[:2], lp_bot[:2], 5))
              rp_top = self.project3D((g.x, g.center_y + half_w, pole_z_top)); rp_bot = self.project3D((g.x, g.center_y + half_w, pole_z_bottom))
