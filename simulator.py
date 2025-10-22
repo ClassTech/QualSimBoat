@@ -14,7 +14,9 @@ import numpy as np
 from config import *
 from world import SubmarinePhysicsState
 from world import PrequalGate, PrequalMarker
-from data_structures import ThrusterCommands, MPU6050Readings, SensorSuite
+# --- Import Vision ---
+from data_structures import ThrusterCommands, MPU6050Readings, SensorSuite, Vision
+# ---
 from ai.submarine import Submarine
 
 
@@ -33,28 +35,24 @@ class SubmarineSimulator:
         self.smallFont = pygame.font.Font(None, 24)
         self.cameraSurface = pygame.Surface((320, 240))
         try:
-            # (Image loading remains the same)
-            # --- MODIFIED: Use your new background image file name ---
-            # Make sure to replace "BackgroundImage.jpg" with the
-            # actual filename you saved in your project directory.
+            # --- Load your background image ---
             bg_img = pygame.image.load("BackgroundImage.jpg").convert()
             # ---
             h=480; w=int(bg_img.get_width()*(h/bg_img.get_height()))
             self.camera_background = pygame.transform.scale(bg_img, (w,h))
             self.camera_background_pano = pygame.Surface((w*2,h))
             self.camera_background_pano.blit(self.camera_background,(0,0)); self.camera_background_pano.blit(self.camera_background,(w,0))
-        except pygame.error: self.camera_background, self.camera_background_pano = None, None
+        except pygame.error as e: 
+            print(f"Error loading background image: {e}")
+            self.camera_background, self.camera_background_pano = None, None
 
-        # --- Physics Properties ---
-        self.subMass = 4.0 # Keep estimated mass
-        # --- MODIFIED: Increased Inertia ---
-        self.subInertia = 0.35 # Was 0.15 - More resistance to starting/stopping turns
-        # ---
+        # --- Physics Properties (remain the same) ---
+        self.subMass = 4.0 
+        self.subInertia = 0.35 
         self.netBuoyancyForce, self.thrusterMaxForce = 0.0, 0.8
-        self.surgeDragCoeff = 1.5 # Keep surge drag
-        self.swayDragCoeff = 8.0  # Keep high sway drag
-        # --- MODIFIED: Increased Angular Drag ---
-        self.angularDragCoeff = 0.25 # Was 0.1 - More resistance to turning
+        self.surgeDragCoeff = 1.5 
+        self.swayDragCoeff = 8.0  
+        self.angularDragCoeff = 0.25 
         # ---
 
         self.submarineAI = submarine_ai
@@ -99,7 +97,7 @@ class SubmarineSimulator:
                  elif event.key == pygame.K_r: self.resetSimulation()
 
     def applyPhysics(self, dt, commands):
-        # (applyPhysics with separate surge/sway drag remains the same)
+        # (applyPhysics remains the same)
         f_port = commands.port * self.thrusterMaxForce
         f_starboard = commands.starboard * self.thrusterMaxForce
         thrust_surge = f_port + f_starboard
@@ -153,7 +151,7 @@ class SubmarineSimulator:
 
 
     def generateCameraView(self):
-        # (Remains the same)
+        # (generateCameraView remains the same - draws world objects)
         w,h = self.cameraSurface.get_size()
         if self.camera_background_pano:
              bg_w,bg_h = self.camera_background.get_size()
@@ -161,39 +159,33 @@ class SubmarineSimulator:
              y_off = np.clip(((bg_h-h)/2)-(self.subPhysics.pitch*2.0), 0, bg_h-h)
              self.cameraSurface.blit(self.camera_background_pano, (-x_off, -y_off))
         else:
-             self.cameraSurface.fill(WATER_COLOR)
+             self.cameraSurface.fill(WATER_COLOR) # Fallback if image fails
              hp = self.project3D((self.subPhysics.x+20, self.subPhysics.y, self.config.worldDepth))
              if hp: pygame.draw.rect(self.cameraSurface, POOL_FLOOR_COLOR, (0,hp[1],w,h))
+             
         drawable = []
         if self.prequal_gate:
-             g = self.prequal_gate; half_w = g.width / 2; z_bottom = g.z_top + g.height
-             corners_3d = [(g.x, g.center_y - half_w, g.z_top), (g.x, g.center_y + half_w, g.z_top),(g.x, g.center_y + half_w, z_bottom), (g.x, g.center_y - half_w, z_bottom)]
-             proj_corners = [self.project3D(p) for p in corners_3d]
-             
-             # --- MODIFICATION: Commented out the submerged gate polygon ---
-             # if all(proj_corners): points_2d = [p[:2] for p in proj_corners]; avg_dist = sum(p[2] for p in proj_corners) / 4; drawable.append((avg_dist, 'polygon', g.color, points_2d, 5))
-             # ---
-             
-             # --- MODIFICATION: Changed pole_color from GRAY to g.color ---
-             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color # Was GRAY
-             # ---
-             
+             g = self.prequal_gate; half_w = g.width / 2;
+             # Gate poles drawing logic (unchanged)
+             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color 
              lp_top = self.project3D((g.x, g.center_y - half_w, pole_z_top)); lp_bot = self.project3D((g.x, g.center_y - half_w, pole_z_bottom))
              if lp_top and lp_bot: avg_dist = (lp_top[2] + lp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, lp_top[:2], lp_bot[:2], 5))
              rp_top = self.project3D((g.x, g.center_y + half_w, pole_z_top)); rp_bot = self.project3D((g.x, g.center_y + half_w, pole_z_bottom))
              if rp_top and rp_bot: avg_dist = (rp_top[2] + rp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, rp_top[:2], rp_bot[:2], 5))
         if self.prequal_marker:
+             # Marker pole drawing logic (unchanged)
              m = self.prequal_marker; tp = self.project3D((m.x, m.y, m.z_top)); bp = self.project3D((m.x, m.y, m.z_bottom))
              if tp and bp: avg_dist = (tp[2] + bp[2]) / 2; drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], 8))
+             
         drawable.sort(key=lambda x: x[0], reverse=True)
         for d in drawable:
-             if d[1]=='polygon': pygame.draw.polygon(self.cameraSurface, d[2], d[3], d[4])
-             elif d[1]=='line': pygame.draw.line(self.cameraSurface, d[2], d[3], d[4], d[5])
+             if d[1]=='line': pygame.draw.line(self.cameraSurface, d[2], d[3], d[4], d[5])
+             elif d[1]=='polygon': pygame.draw.polygon(self.cameraSurface, d[2], d[3], d[4]) # Retained just in case
              elif d[1]=='rect': pygame.draw.rect(self.cameraSurface, d[2], d[3])
 
 
     def render(self):
-        # (Remains the same)
+        # (render remains the same - draws top-down view and UI)
         self.screen.fill(LIGHT_BLUE)
         pygame.draw.rect(self.screen, BLACK, (40,40,int(self.config.worldWidth*self.scaleX+20),int(self.config.worldHeight*self.scaleY+20)), 2)
         if self.prequal_gate: g = self.prequal_gate; p1 = self.worldToScreen(g.x, g.center_y - g.width / 2); p2 = self.worldToScreen(g.x, g.center_y + g.width / 2); pygame.draw.line(self.screen, g.color, p1, p2, 4)
@@ -229,23 +221,67 @@ class SubmarineSimulator:
 
 
     def run(self):
-        # (Remains the same)
+        # (run method main loop)
         while self.running:
              dt = self.clock.tick(60) / 1000.0;
-             if dt > 0.1: dt = 0.1
+             if dt > 0.1: dt = 0.1 # Cap dt
+             
              self.handleInput()
-             if self.paused: self.render(); continue
+             if self.paused: 
+                 # Still need to render when paused to show UI updates
+                 self.render() 
+                 continue
+                 
+             # Generate camera view BEFORE AI update
              self.generateCameraView()
-             sensors = SensorSuite(camera_image=self.cameraSurface, depth=self.subPhysics.z, heading=self.subPhysics.heading, pitch=self.subPhysics.pitch, imu=self.last_imu_readings, x=self.subPhysics.x, y=self.subPhysics.y, velocity_x=self.subPhysics.velocity_x, velocity_y=self.subPhysics.velocity_y, angular_velocity_y=self.subPhysics.angular_velocity_y, velocity_z=self.subPhysics.velocity_z)
-             thrusterCommands, vision_data = self.submarineAI.update(dt, sensors)
+             
+             # Create SensorSuite
+             sensors = SensorSuite(camera_image=self.cameraSurface, depth=self.subPhysics.z, 
+                                   heading=self.subPhysics.heading, pitch=self.subPhysics.pitch, 
+                                   imu=self.last_imu_readings, x=self.subPhysics.x, y=self.subPhysics.y, 
+                                   velocity_x=self.subPhysics.velocity_x, velocity_y=self.subPhysics.velocity_y, 
+                                   angular_velocity_y=0.0, # Assuming no pitch velocity for surface boat
+                                   velocity_z=0.0)
+                                   
+             # --- AI Update now returns the Vision object ---
+             thrusterCommands, vision_results = self.submarineAI.update(dt, sensors)
+             # ---
+             
              if thrusterCommands.pause_simulation: self.paused = True
              self.lastThrusterCommands = thrusterCommands
-             # (Vision debug remains the same)
-             for pole in vision_data.potential_poles: pygame.draw.rect(self.cameraSurface, ORANGE, (pole['min_x'], pole['min_y'], pole['max_x']-pole['min_x'], pole['max_y']-pole['min_y']), 1)
-             if vision_data.gate_is_visible: w,h = vision_data.max_x-vision_data.min_x, vision_data.max_y-vision_data.min_y; pygame.draw.rect(self.cameraSurface, YELLOW, (vision_data.min_x, vision_data.min_y, w, h), 1)
-             for pole in vision_data.visible_poles: w,h = pole['max_x']-pole['min_x'], pole['max_y']-pole['min_y']; color = GREEN if pole.get('color') == 'white' else YELLOW; pygame.draw.rect(self.cameraSurface, color, (pole['min_x'], pole['min_y'], w, h), 1)
-             for pole in vision_data.selected_slalom_poles: w = pole['max_x'] - pole['min_x']; h = pole['max_y'] - pole['min_y']; pygame.draw.rect(self.cameraSurface, MAGENTA, (pole['min_x'], pole['min_y'], w, h), 3)
-             for pole in vision_data.avoidance_poles: w = pole['max_x'] - pole['min_x']; h = pole['max_y'] - pole['min_y']; pygame.draw.rect(self.cameraSurface, ORANGE, (pole['min_x'], pole['min_y'], w, h), 3)
+             
+             # --- Vision Debug Drawing (UPDATED) ---
+             # Draw all detected red blobs (potential gate poles)
+             for pole in vision_results.red_blobs:
+                  pygame.draw.rect(self.cameraSurface, ORANGE, 
+                                   (pole['min_x'], pole['min_y'], pole['width'], pole['height']), 1)
+
+             # If a gate pair was identified, draw a box around it
+             gate_pair = vision_results.get_gate_pair()
+             if gate_pair:
+                 left_pole, right_pole = gate_pair
+                 min_x = left_pole['min_x']
+                 max_x = right_pole['max_x']
+                 min_y = min(left_pole['min_y'], right_pole['min_y'])
+                 max_y = max(left_pole['max_y'], right_pole['max_y'])
+                 pygame.draw.rect(self.cameraSurface, YELLOW, (min_x, min_y, max_x - min_x, max_y - min_y), 1)
+
+             # If a single best green pole was identified, draw a box around it
+             best_pole = vision_results.get_best_pole()
+             if best_pole:
+                  pygame.draw.rect(self.cameraSurface, GREEN, 
+                                   (best_pole['min_x'], best_pole['min_y'], best_pole['width'], best_pole['height']), 2)
+
+             # Remove old debug drawings based on deprecated VisionData fields
+             # for pole in vision_data.visible_poles: ...
+             # for pole in vision_data.selected_slalom_poles: ...
+             # for pole in vision_data.avoidance_poles: ...
+             # --- END Vision Debug Drawing Update ---
+             
+             # Apply physics
              self.applyPhysics(dt, thrusterCommands)
+             
+             # Render final frame
              self.render()
+             
         pygame.quit()

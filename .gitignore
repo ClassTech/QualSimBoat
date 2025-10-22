@@ -1,4 +1,11 @@
-ai/__pycache__
-ai/tasks/__pycache__
-__pycache__
+ai/__pycache__/
+ai/tasks/__pycache__/
+__pycache__/
 
+__pycache__/data_structures.cpython-312.pyc
+__pycache__/data_structures.cpython-312.pyc
+ai/tasks/__pycache__/common_subtasks.cpython-312.pyc
+ai/tasks/__pycache__/gate_task.cpython-312.pyc
+ai/tasks/__pycache__/stabilize_task.cpython-312.pyc
+__pycache__/data_structures.cpython-312.pyc
+__pycache__/simulator.cpython-312.pyc
