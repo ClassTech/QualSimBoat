@@ -20,7 +20,7 @@ class Submarine:
         self.ALIGN_YAW_P_GAIN = 0.6
         self.ALIGN_SWAY_P_GAIN = 1.8
         self.ALIGN_DAMPING_GAIN = 1.0
-        self.YAW_D_GAIN = 2.0
+        self.YAW_D_GAIN = 4.5
         self.HOVER_YAW_P_GAIN = 0.1
         self.HOVER_XY_P_GAIN = 1.0
         self.HOVER_XY_I_GAIN = 0.0

@@ -6,7 +6,8 @@ Assembles and starts the simulation.
 from simulator import SubmarineSimulator
 from ai.submarine import Submarine
 # --- Absolute imports from ai.tasks package ---
-from ai.tasks import GateTask, StabilizeTask, MarkerTurnTask
+# --- MODIFY IMPORTS ---
+from ai.tasks import GateTask, StabilizeTask, RatchetTurnTask # Was MarkerTurnTask
 # ---
 
 if __name__ == "__main__":
@@ -15,9 +16,14 @@ if __name__ == "__main__":
     mission = [
         GateTask(target_depth=MISSION_DEPTH),
         StabilizeTask(duration=2.0),
-        MarkerTurnTask(target_depth=MISSION_DEPTH),
+        # --- USE NEW TASK ---
+       RatchetTurnTask(initial_target_fraction=0.6,
+                subsequent_target_fraction=0.8, # Default shown
+                surge_power=0.3,
+                yaw_power=-0.3), # Defaults shown
+        # ---
         StabilizeTask(duration=2.0),
-        GateTask(target_depth=MISSION_DEPTH)
+        GateTask(target_depth=MISSION_DEPTH) # Go back through gate
     ]
 
     submarine_ai = Submarine(mission_plan=mission)
