@@ -34,6 +34,9 @@ class SubmarineSimulator:
         self.font = pygame.font.Font(None, 36)
         self.smallFont = pygame.font.Font(None, 24)
         self.cameraSurface = pygame.Surface((320, 240))
+        # --- ADDED: Side Camera Surface ---
+        self.sideCameraSurface = pygame.Surface((320, 240))
+        # ---
         try:
             # --- Load your background image ---
             bg_img = pygame.image.load("BackgroundImage.jpg").convert()
@@ -116,7 +119,9 @@ class SubmarineSimulator:
         fx = total_force_surge * cos_h - total_force_sway * sin_h
         fy = total_force_surge * sin_h + total_force_sway * cos_h
         ax, ay = fx / self.subMass, fy / self.subMass
+        # --- FIXED: Typo subInertIA -> subInertia ---
         angular_accel_z = total_torque_yaw / self.subInertia
+        # ---
         self.subPhysics.velocity_x += ax * dt
         self.subPhysics.velocity_y += ay * dt
         self.subPhysics.angular_velocity_z += angular_accel_z * dt
@@ -149,6 +154,42 @@ class SubmarineSimulator:
         f = w/(2*math.tan(math.radians(self.config.cameraFov/2)))
         return int(w/2-f*(cx/cz)), int(h/2-f*(cy/cz)), math.hypot(dx,dy,dz)
 
+    # --- UPDATED: project3DSide with physical offset and correct axis swap ---
+    def project3DSide(self, world_pos: Tuple[float, float, float]) -> Optional[Tuple[int, int, float]]:
+        # --- ADDED: Calculate the camera's actual world position ---
+        # Assume camera is on the starboard (right) side
+        cam_y_offset_local = -self.config.submarineWidth / 2.0 # Starboard side
+        cam_x_offset_local = 0.0 # Assume centered on length
+
+        h_rad = math.radians(self.subPhysics.heading)
+        cos_h, sin_h = math.cos(h_rad), math.sin(h_rad)
+
+        # Calculate the camera's world (x, y) coords
+        world_cam_x = self.subPhysics.x + (cam_x_offset_local * cos_h - cam_y_offset_local * sin_h)
+        world_cam_y = self.subPhysics.y + (cam_x_offset_local * sin_h + cam_y_offset_local * cos_h)
+        
+        # Calculate dx/dy from the camera's true position, not the boat's center
+        dx,dy,dz = world_pos[0]-world_cam_x, world_pos[1]-world_cam_y, world_pos[2]-self.subPhysics.z
+        # --- END ADDITION ---
+
+        # Use the FRONT camera's heading math (no +/- 90)
+        h,p = math.radians(-self.subPhysics.heading), math.radians(-self.subPhysics.pitch)
+        ch,sh,cp,sp = math.cos(h),math.sin(h),math.cos(p),math.sin(p)
+        
+        # Calculate boat-relative coordinates
+        x_yaw, y_yaw = dx*ch-dy*sh, dx*sh+dy*ch
+        
+        # --- MODIFIED: This is the correct axis swap for starboard ---
+        # cz (depth) = -y_yaw (starboard direction)
+        # cx (screen x) = x_yaw (forward direction)
+        cz,cy,cx = -y_yaw*cp+dz*sp, -y_yaw*sp-dz*cp, x_yaw
+        
+        if cz < 0.01: return None # Near-clip plane
+        
+        w,h = self.sideCameraSurface.get_size()
+        f = w/(2*math.tan(math.radians(self.config.cameraFov/2)))
+        return int(w/2-f*(cx/cz)), int(h/2-f*(cy/cz)), math.hypot(dx,dy,dz)
+    # ---
 
     def generateCameraView(self):
         # (generateCameraView remains the same - draws world objects)
@@ -183,6 +224,49 @@ class SubmarineSimulator:
              elif d[1]=='polygon': pygame.draw.polygon(self.cameraSurface, d[2], d[3], d[4]) # Retained just in case
              elif d[1]=='rect': pygame.draw.rect(self.cameraSurface, d[2], d[3])
 
+    # --- ADDED: generateSideCameraView (copy of generateCameraView) ---
+    def generateSideCameraView(self):
+        # --- MODIFIED: Use sideCameraSurface ---
+        w,h = self.sideCameraSurface.get_size() 
+        if self.camera_background_pano:
+             bg_w,bg_h = self.camera_background.get_size()
+             # --- MODIFIED: Correct background pan & wrap ---
+             side_heading = (self.subPhysics.heading - 90.0) % 360.0
+             x_off = (side_heading / 360.0) * bg_w
+             # ---
+             y_off = np.clip(((bg_h-h)/2)-(self.subPhysics.pitch*2.0), 0, bg_h-h)
+             # --- MODIFIED: Use sideCameraSurface ---
+             self.sideCameraSurface.blit(self.camera_background_pano, (-x_off, -y_off)) 
+        else:
+             # --- MODIFIED: Use sideCameraSurface ---
+             self.sideCameraSurface.fill(WATER_COLOR) # Fallback if image fails 
+             # --- MODIFIED: Use project3DSide ---
+             hp = self.project3DSide((self.subPhysics.x+20, self.subPhysics.y, self.config.worldDepth)) 
+             if hp: pygame.draw.rect(self.sideCameraSurface, POOL_FLOOR_COLOR, (0,hp[1],w,h))
+             
+        drawable = []
+        if self.prequal_gate:
+             g = self.prequal_gate; half_w = g.width / 2;
+             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color 
+             # --- MODIFIED: Use project3DSide ---
+             lp_top = self.project3DSide((g.x, g.center_y - half_w, pole_z_top)); lp_bot = self.project3DSide((g.x, g.center_y - half_w, pole_z_bottom))
+             if lp_top and lp_bot: avg_dist = (lp_top[2] + lp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, lp_top[:2], lp_bot[:2], 5))
+             # --- MODIFIED: Use project3DSide ---
+             rp_top = self.project3DSide((g.x, g.center_y + half_w, pole_z_top)); rp_bot = self.project3DSide((g.x, g.center_y + half_w, pole_z_bottom))
+             if rp_top and rp_bot: avg_dist = (rp_top[2] + rp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, rp_top[:2], rp_bot[:2], 5))
+        if self.prequal_marker:
+             m = self.prequal_marker
+             # --- MODIFIED: Use project3DSide ---
+             tp = self.project3DSide((m.x, m.y, m.z_top)); bp = self.project3DSide((m.x, m.y, m.z_bottom))
+             if tp and bp: avg_dist = (tp[2] + bp[2]) / 2; drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], 8))
+             
+        drawable.sort(key=lambda x: x[0], reverse=True)
+        for d in drawable:
+             # --- MODIFIED: Use sideCameraSurface ---
+             if d[1]=='line': pygame.draw.line(self.sideCameraSurface, d[2], d[3], d[4], d[5])
+             elif d[1]=='polygon': pygame.draw.polygon(self.sideCameraSurface, d[2], d[3], d[4])
+             elif d[1]=='rect': pygame.draw.rect(self.sideCameraSurface, d[2], d[3])
+    # ---
 
     def render(self):
         # (render remains the same - draws top-down view and UI)
@@ -193,8 +277,21 @@ class SubmarineSimulator:
         subPos = self.worldToScreen(self.subPhysics.x, self.subPhysics.y); hRad, cos_h, sin_h = math.radians(self.subPhysics.heading), math.cos(math.radians(self.subPhysics.heading)), math.sin(math.radians(self.subPhysics.heading)); pvc_s = self.config.submarineWidth*self.scaleX/2
         corners = [(-pvc_s,-pvc_s), (pvc_s,-pvc_s), (pvc_s,pvc_s), (-pvc_s,pvc_s)]; rotated = [(subPos[0]+dx*cos_h-dy*sin_h, subPos[1]-(dx*sin_h+dy*cos_h)) for dx,dy in corners]; pygame.draw.polygon(self.screen,YELLOW,rotated,4)
         box_w,box_l=0.127*self.scaleY/2,self.config.submarineLength*self.scaleX/2; box_corners=[(-box_l,-box_w),(box_l,-box_w),(box_l,box_w),(-box_l,box_w)]; rotated_box=[(subPos[0]+dx*cos_h-dy*sin_h,subPos[1]-(dx*sin_h+dy*cos_h)) for dx,dy in box_corners]; pygame.draw.polygon(self.screen,CONTROL_BOX_GRAY,rotated_box)
+        # --- FIXED: Typo boxw -> box_w ---
         arrow_pts = [(box_l,-box_w),(box_l,box_w),(box_l+0.2*self.scaleX,0)]; rotated_arrow=[(subPos[0]+dx*cos_h-dy*sin_h, subPos[1]-(dx*sin_h+dy*cos_h)) for dx,dy in arrow_pts]; pygame.draw.polygon(self.screen, YELLOW, rotated_arrow)
-        self._renderUi(); scaled_camera = pygame.transform.scale(self.cameraSurface, (400, 300)); self.screen.blit(scaled_camera, (self.width-420, 20)); pygame.draw.rect(self.screen, BLACK, (self.width-420, 20, 400, 300), 2); pygame.display.flip()
+        # ---
+        self._renderUi(); 
+        scaled_camera = pygame.transform.scale(self.cameraSurface, (400, 300)); 
+        self.screen.blit(scaled_camera, (self.width-420, 20)); 
+        pygame.draw.rect(self.screen, BLACK, (self.width-420, 20, 400, 300), 2); 
+        
+        # --- ADDED: Blit the side camera view ---
+        scaled_side_camera = pygame.transform.scale(self.sideCameraSurface, (400, 300))
+        self.screen.blit(scaled_side_camera, (self.width-420, 330)) # Stacked below main camera
+        pygame.draw.rect(self.screen, BLACK, (self.width-420, 330, 400, 300), 2)
+        # ---
+        
+        pygame.display.flip()
 
     def _drawThrusterBar(self, x, y, label, value):
         # (Remains the same)
@@ -215,7 +312,11 @@ class SubmarineSimulator:
         for s in imu_stats: self.screen.blit(self.smallFont.render(s,True,BLACK),(20,y)); y+=18
         y = self.height - 80; controls=["Controls:", "R - Reset", "SPACE - Pause"]
         for c in controls: self.screen.blit(self.smallFont.render(c,True,BLACK),(20,y)); y+=18
-        tx,ty = self.width-420,350; self.screen.blit(self.smallFont.render("Thruster Output:",True,BLACK),(tx,ty)); ty+=25
+        
+        # --- MODIFIED: Changed y-position from 350 to 640 ---
+        tx,ty = self.width-420,640; self.screen.blit(self.smallFont.render("Thruster Output:",True,BLACK),(tx,ty)); ty+=25
+        # ---
+        
         tc=self.lastThrusterCommands; h_labels=[("Port",tc.port),("Star",tc.starboard)]
         for i,(l,v) in enumerate(h_labels): self._drawThrusterBar(tx+i*50,ty,l,v)
 
@@ -234,6 +335,9 @@ class SubmarineSimulator:
                  
              # Generate camera view BEFORE AI update
              self.generateCameraView()
+             # --- ADDED: Generate side camera view ---
+             self.generateSideCameraView()
+             # ---
              
              # Create SensorSuite
              sensors = SensorSuite(camera_image=self.cameraSurface, depth=self.subPhysics.z, 
