@@ -20,7 +20,7 @@ class Submarine:
         self.ALIGN_YAW_P_GAIN = 0.6
         self.ALIGN_SWAY_P_GAIN = 1.8 # Likely unused for surface boat
         self.ALIGN_DAMPING_GAIN = 1.0 # Likely unused for surface boat
-        self.YAW_D_GAIN = 4.0 # Keep increased value
+        self.YAW_D_GAIN = 6.0 # Keep increased value
         self.HOVER_YAW_P_GAIN = 0.1
         self.HOVER_XY_P_GAIN = 1.0
         self.HOVER_XY_I_GAIN = 0.0
@@ -36,11 +36,15 @@ class Submarine:
         self._latest_sensors: Optional[SensorSuite] = None
         # ---
         
-        # --- Create Vision object ---
-        # The lambda function captures 'self' to access _latest_sensors later
-        self.vision = Vision(image_provider=lambda: self._latest_sensors.camera_image if self._latest_sensors else None,
-                             min_pole_pixels=self.MIN_PIXELS_FOR_DETECTION,
-                             min_gate_pixels=50) # Example gate threshold
+        # --- Create Vision object for FRONT camera ---
+        self.front_vision = Vision(image_provider=lambda: self._latest_sensors.camera_image if self._latest_sensors else None,
+                                   min_pole_pixels=self.MIN_PIXELS_FOR_DETECTION,
+                                   min_gate_pixels=50)
+        
+        # --- Create Vision object for SIDE camera ---
+        self.side_vision = Vision(image_provider=lambda: self._latest_sensors.side_camera_image if self._latest_sensors else None,
+                                  min_pole_pixels=self.MIN_PIXELS_FOR_DETECTION,
+                                  min_gate_pixels=50) # Uses same thresholds for now
         # ---
         
         self.reset()
@@ -53,31 +57,28 @@ class Submarine:
         self.integral_x_err, self.integral_y_err, self.integral_clamp = 0.0, 0.0, 2.0 
         self._latest_sensors = None # Clear sensors on reset
 
-    def update(self, dt: float, sensors: SensorSuite) -> Tuple[ThrusterCommands, Vision]: # Return Vision object for debug
+    # --- MODIFIED: Return tuple of Vision objects ---
+    def update(self, dt: float, sensors: SensorSuite) -> Tuple[ThrusterCommands, Tuple[Vision, Vision]]: 
         
         self._latest_sensors = sensors
 
         if self.current_task_index >= len(self.mission_plan):
-            return ThrusterCommands(), self.vision 
+            # --- MODIFIED: Return both vision objects ---
+            return ThrusterCommands(), (self.front_vision, self.side_vision) 
 
         current_task = self.mission_plan[self.current_task_index]
 
-        self.vision.update()
+        # --- MODIFIED: Update both vision objects ---
+        self.front_vision.update()
+        self.side_vision.update()
+        # ---
 
-        status, commands = current_task.execute(self, dt, sensors, self.vision, self.config)
+        # --- MODIFIED: Pass both vision objects to execute ---
+        status, commands = current_task.execute(self, dt, sensors, self.front_vision, self.side_vision, self.config)
+        # ---
 
         # --- Task Transition Logic ---
         if status == TaskStatus.COMPLETED and self.current_task_index < len(self.mission_plan) - 1:
-            
-            # --- ADD Logic to set search direction ---
-            # Check if the completed task was RatchetTurnTask
-            from ai.tasks import RatchetTurnTask, GateTask # Add imports here
-            if isinstance(current_task, RatchetTurnTask):
-                # Check if the *next* task is GateTask
-                next_task_index = self.current_task_index + 1
-                if next_task_index < len(self.mission_plan):
-                    next_task_instance = self.mission_plan[next_task_index]
-            # --- END Logic addition ---
 
             # Standard transition
             self.current_task_index += 1
@@ -87,7 +88,9 @@ class Submarine:
             if hasattr(next_task, 'on_start'):
                 next_task.on_start(self, sensors) 
 
-        return commands, self.vision
+        # --- MODIFIED: Return both vision objects ---
+        return commands, (self.front_vision, self.side_vision)
+    
     # (Helper methods like get_current_task_name, get_current_state_name, etc., remain the same)
     # ... [rest of the helper methods] ...
     
@@ -101,9 +104,11 @@ class Submarine:
              return self.mission_plan[self.current_task_index].state_name
         return ""
 
-    def _get_navigation_target(self, vision: Vision, cam_w: int) -> Tuple[float | None, str | None]:
+    # --- MODIFIED: Signature (not used, but for consistency) ---
+    def _get_navigation_target(self, front_vision: Vision, side_vision: Vision, cam_w: int) -> Tuple[float | None, str | None]:
         # Example using new Vision object - likely unused now
-        gate_pair = vision.get_gate_pair()
+        gate_pair = front_vision.get_gate_pair()
+        # ---
         if gate_pair:
              l, r = gate_pair[0]['center_x'], gate_pair[1]['center_x']
              return (l, 'left') if abs(l - cam_w/2) < abs(r - cam_w/2) else (r, 'right')
@@ -144,10 +149,11 @@ class Submarine:
         sway = np.clip(sway_damp, -0.5, 0.5) # Limit sway damping effect
         
         # --- Rename local variable ---
-        vision = self.vision # Example, although not used in this specific method
+        front_vision = self.front_vision # Example, although not used
         # ---
         
         return self._mix_and_normalize_commands(surge_power, sway, yaw)
+    
     def _get_pid_hover_commands(self, sensors: SensorSuite, dt: float, tx: float, ty: float,
                                 yaw_p_gain_override: Optional[float] = None) -> ThrusterCommands:
         yaw_p_gain = yaw_p_gain_override if yaw_p_gain_override is not None else self.HOVER_YAW_P_GAIN

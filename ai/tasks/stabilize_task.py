@@ -7,9 +7,7 @@ import math
 from typing import Tuple
 
 from .task_base import Task, TaskStatus
-# --- CORRECT IMPORT ---
 from data_structures import SensorSuite, Vision, ThrusterCommands
-# ---
 from config import SimulationConfig
 
 class StabilizeTask(Task):
@@ -38,8 +36,9 @@ class StabilizeTask(Task):
 
     # process_vision is removed as it's handled by the Vision class
 
+    # --- MODIFIED: Signature updated to accept both vision objects ---
     def execute(self, sub: 'Submarine', dt: float, sensors: SensorSuite, 
-                vision_data: Vision, # Correct type hint
+                front_vision: Vision, side_vision: Vision,
                 config: SimulationConfig) -> Tuple[TaskStatus, ThrusterCommands]:
         
         # On first execution, lock position/heading and RESET PID INTEGRALS.

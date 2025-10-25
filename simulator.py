@@ -45,17 +45,17 @@ class SubmarineSimulator:
             self.camera_background = pygame.transform.scale(bg_img, (w,h))
             self.camera_background_pano = pygame.Surface((w*2,h))
             self.camera_background_pano.blit(self.camera_background,(0,0)); self.camera_background_pano.blit(self.camera_background,(w,0))
-        except pygame.error as e: 
+        except pygame.error as e:
             print(f"Error loading background image: {e}")
             self.camera_background, self.camera_background_pano = None, None
 
         # --- Physics Properties (remain the same) ---
-        self.subMass = 4.0 
-        self.subInertia = 0.35 
+        self.subMass = 4.0
+        self.subInertia = 0.35
         self.netBuoyancyForce, self.thrusterMaxForce = 0.0, 0.8
-        self.surgeDragCoeff = 1.5 
-        self.swayDragCoeff = 8.0  
-        self.angularDragCoeff = 0.25 
+        self.surgeDragCoeff = 1.5
+        self.swayDragCoeff = 15.0
+        self.angularDragCoeff = 0.25
         # ---
 
         self.submarineAI = submarine_ai
@@ -167,7 +167,7 @@ class SubmarineSimulator:
         # Calculate the camera's world (x, y) coords
         world_cam_x = self.subPhysics.x + (cam_x_offset_local * cos_h - cam_y_offset_local * sin_h)
         world_cam_y = self.subPhysics.y + (cam_x_offset_local * sin_h + cam_y_offset_local * cos_h)
-        
+
         # Calculate dx/dy from the camera's true position, not the boat's center
         dx,dy,dz = world_pos[0]-world_cam_x, world_pos[1]-world_cam_y, world_pos[2]-self.subPhysics.z
         # --- END ADDITION ---
@@ -175,17 +175,17 @@ class SubmarineSimulator:
         # Use the FRONT camera's heading math (no +/- 90)
         h,p = math.radians(-self.subPhysics.heading), math.radians(-self.subPhysics.pitch)
         ch,sh,cp,sp = math.cos(h),math.sin(h),math.cos(p),math.sin(p)
-        
+
         # Calculate boat-relative coordinates
         x_yaw, y_yaw = dx*ch-dy*sh, dx*sh+dy*ch
-        
+
         # --- MODIFIED: This is the correct axis swap for starboard ---
         # cz (depth) = -y_yaw (starboard direction)
         # cx (screen x) = x_yaw (forward direction)
         cz,cy,cx = -y_yaw*cp+dz*sp, -y_yaw*sp-dz*cp, x_yaw
-        
+
         if cz < 0.01: return None # Near-clip plane
-        
+
         w,h = self.sideCameraSurface.get_size()
         f = w/(2*math.tan(math.radians(self.config.cameraFov/2)))
         return int(w/2-f*(cx/cz)), int(h/2-f*(cy/cz)), math.hypot(dx,dy,dz)
@@ -203,38 +203,38 @@ class SubmarineSimulator:
              self.cameraSurface.fill(WATER_COLOR) # Fallback if image fails
              hp = self.project3D((self.subPhysics.x+20, self.subPhysics.y, self.config.worldDepth))
              if hp: pygame.draw.rect(self.cameraSurface, POOL_FLOOR_COLOR, (0,hp[1],w,h))
-             
+
         drawable = []
         if self.prequal_gate:
              g = self.prequal_gate; half_w = g.width / 2;
              # Gate poles drawing logic (unchanged)
-             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color 
+             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color
              lp_top = self.project3D((g.x, g.center_y - half_w, pole_z_top)); lp_bot = self.project3D((g.x, g.center_y - half_w, pole_z_bottom))
              if lp_top and lp_bot: avg_dist = (lp_top[2] + lp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, lp_top[:2], lp_bot[:2], 5))
              rp_top = self.project3D((g.x, g.center_y + half_w, pole_z_top)); rp_bot = self.project3D((g.x, g.center_y + half_w, pole_z_bottom))
              if rp_top and rp_bot: avg_dist = (rp_top[2] + rp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, rp_top[:2], rp_bot[:2], 5))
-        
+
         # --- MODIFIED: Dynamic width for front camera ---
         if self.prequal_marker:
              m = self.prequal_marker
              tp = self.project3D((m.x, m.y, m.z_top))
              bp = self.project3D((m.x, m.y, m.z_bottom))
-             
+
              if tp and bp:
                  dist = (tp[2] + bp[2]) / 2.0 # Average distance to pole
                  if dist < 0.1: dist = 0.1 # Avoid division by zero
-                 
+
                  w,h = self.cameraSurface.get_size()
                  f = w/(2*math.tan(math.radians(self.config.cameraFov/2)))
-                 
+
                  # Apparent width = focal_length * (world_width / world_distance)
                  pixel_width = int(f * (m.radius * 2) / dist)
                  pixel_width = max(2, pixel_width) # At least 2px wide
-                 
+
                  avg_dist = dist # Already calculated
                  drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], pixel_width))
         # ---
-             
+
         drawable.sort(key=lambda x: x[0], reverse=True)
         for d in drawable:
              if d[1]=='line': pygame.draw.line(self.cameraSurface, d[2], d[3], d[4], d[5])
@@ -244,7 +244,7 @@ class SubmarineSimulator:
     # --- ADDED: generateSideCameraView (copy of generateCameraView) ---
     def generateSideCameraView(self):
         # --- MODIFIED: Use sideCameraSurface ---
-        w,h = self.sideCameraSurface.get_size() 
+        w,h = self.sideCameraSurface.get_size()
         if self.camera_background_pano:
              bg_w,bg_h = self.camera_background.get_size()
              # --- MODIFIED: Correct background pan & wrap ---
@@ -253,25 +253,25 @@ class SubmarineSimulator:
              # ---
              y_off = np.clip(((bg_h-h)/2)-(self.subPhysics.pitch*2.0), 0, bg_h-h)
              # --- MODIFIED: Use sideCameraSurface ---
-             self.sideCameraSurface.blit(self.camera_background_pano, (-x_off, -y_off)) 
+             self.sideCameraSurface.blit(self.camera_background_pano, (-x_off, -y_off))
         else:
              # --- MODIFIED: Use sideCameraSurface ---
-             self.sideCameraSurface.fill(WATER_COLOR) # Fallback if image fails 
+             self.sideCameraSurface.fill(WATER_COLOR) # Fallback if image fails
              # --- MODIFIED: Use project3DSide ---
-             hp = self.project3DSide((self.subPhysics.x+20, self.subPhysics.y, self.config.worldDepth)) 
+             hp = self.project3DSide((self.subPhysics.x+20, self.subPhysics.y, self.config.worldDepth))
              if hp: pygame.draw.rect(self.sideCameraSurface, POOL_FLOOR_COLOR, (0,hp[1],w,h))
-             
+
         drawable = []
         if self.prequal_gate:
              g = self.prequal_gate; half_w = g.width / 2;
-             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color 
+             pole_z_top = -self.prequal_config.POLE_ABOVE_SURFACE_METERS; pole_z_bottom = self.config.worldDepth - 0.01; pole_color = g.color
              # --- MODIFIED: Use project3DSide ---
              lp_top = self.project3DSide((g.x, g.center_y - half_w, pole_z_top)); lp_bot = self.project3DSide((g.x, g.center_y - half_w, pole_z_bottom))
              if lp_top and lp_bot: avg_dist = (lp_top[2] + lp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, lp_top[:2], lp_bot[:2], 5))
              # --- MODIFIED: Use project3DSide ---
              rp_top = self.project3DSide((g.x, g.center_y + half_w, pole_z_top)); rp_bot = self.project3DSide((g.x, g.center_y + half_w, pole_z_bottom))
              if rp_top and rp_bot: avg_dist = (rp_top[2] + rp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, rp_top[:2], rp_bot[:2], 5))
-        
+
         # --- MODIFIED: Dynamic width for side camera ---
         if self.prequal_marker:
              m = self.prequal_marker
@@ -281,19 +281,19 @@ class SubmarineSimulator:
              if tp and bp:
                  dist = (tp[2] + bp[2]) / 2.0 # Average distance to pole
                  if dist < 0.1: dist = 0.1 # Avoid division by zero
-                 
+
                  # Use the side camera's surface and FOV
                  w,h = self.sideCameraSurface.get_size()
                  f = w/(2*math.tan(math.radians(self.config.cameraFov/2)))
-                 
+
                  # Apparent width = focal_length * (world_width / world_distance)
                  pixel_width = int(f * (m.radius * 2) / dist)
                  pixel_width = max(2, pixel_width) # At least 2px wide
-                 
+
                  avg_dist = dist # Already calculated
                  drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], pixel_width))
         # ---
-             
+
         drawable.sort(key=lambda x: x[0], reverse=True)
         for d in drawable:
              # --- MODIFIED: Use sideCameraSurface ---
@@ -314,17 +314,17 @@ class SubmarineSimulator:
         # --- FIXED: Typo boxw -> box_w ---
         arrow_pts = [(box_l,-box_w),(box_l,box_w),(box_l+0.2*self.scaleX,0)]; rotated_arrow=[(subPos[0]+dx*cos_h-dy*sin_h, subPos[1]-(dx*sin_h+dy*cos_h)) for dx,dy in arrow_pts]; pygame.draw.polygon(self.screen, YELLOW, rotated_arrow)
         # ---
-        self._renderUi(); 
-        scaled_camera = pygame.transform.scale(self.cameraSurface, (400, 300)); 
-        self.screen.blit(scaled_camera, (self.width-420, 20)); 
-        pygame.draw.rect(self.screen, BLACK, (self.width-420, 20, 400, 300), 2); 
-        
+        self._renderUi();
+        scaled_camera = pygame.transform.scale(self.cameraSurface, (400, 300));
+        self.screen.blit(scaled_camera, (self.width-420, 20));
+        pygame.draw.rect(self.screen, BLACK, (self.width-420, 20, 400, 300), 2);
+
         # --- ADDED: Blit the side camera view ---
         scaled_side_camera = pygame.transform.scale(self.sideCameraSurface, (400, 300))
         self.screen.blit(scaled_side_camera, (self.width-420, 330)) # Stacked below main camera
         pygame.draw.rect(self.screen, BLACK, (self.width-420, 330, 400, 300), 2)
         # ---
-        
+
         pygame.display.flip()
 
     def _drawThrusterBar(self, x, y, label, value):
@@ -346,12 +346,14 @@ class SubmarineSimulator:
         for s in imu_stats: self.screen.blit(self.smallFont.render(s,True,BLACK),(20,y)); y+=18
         y = self.height - 80; controls=["Controls:", "R - Reset", "SPACE - Pause"]
         for c in controls: self.screen.blit(self.smallFont.render(c,True,BLACK),(20,y)); y+=18
-        
+
         # --- MODIFIED: Changed y-position from 350 to 640 ---
         tx,ty = self.width-420,640; self.screen.blit(self.smallFont.render("Thruster Output:",True,BLACK),(tx,ty)); ty+=25
         # ---
-        
+
+        # --- FIXED: Typo tcTwo -> tc.starboard ---
         tc=self.lastThrusterCommands; h_labels=[("Port",tc.port),("Star",tc.starboard)]
+        # ---
         for i,(l,v) in enumerate(h_labels): self._drawThrusterBar(tx+i*50,ty,l,v)
 
 
@@ -360,42 +362,49 @@ class SubmarineSimulator:
         while self.running:
              dt = self.clock.tick(60) / 1000.0;
              if dt > 0.1: dt = 0.1 # Cap dt
-             
+
              self.handleInput()
-             if self.paused: 
+             if self.paused:
                  # Still need to render when paused to show UI updates
-                 self.render() 
+                 self.render()
                  continue
-                 
+
              # Generate camera view BEFORE AI update
              self.generateCameraView()
              # --- ADDED: Generate side camera view ---
              self.generateSideCameraView()
              # ---
-             
-             # Create SensorSuite
-             sensors = SensorSuite(camera_image=self.cameraSurface, depth=self.subPhysics.z, 
-                                   heading=self.subPhysics.heading, pitch=self.subPhysics.pitch, 
-                                   imu=self.last_imu_readings, x=self.subPhysics.x, y=self.subPhysics.y, 
-                                   velocity_x=self.subPhysics.velocity_x, velocity_y=self.subPhysics.velocity_y, 
+
+             # --- MODIFIED: Create SensorSuite with side_camera_image ---
+             sensors = SensorSuite(camera_image=self.cameraSurface, depth=self.subPhysics.z,
+                                   heading=self.subPhysics.heading, pitch=self.subPhysics.pitch,
+                                   imu=self.last_imu_readings, x=self.subPhysics.x, y=self.subPhysics.y,
+                                   side_camera_image=self.sideCameraSurface,
+                                   velocity_x=self.subPhysics.velocity_x, velocity_y=self.subPhysics.velocity_y,
                                    angular_velocity_y=0.0, # Assuming no pitch velocity for surface boat
                                    velocity_z=0.0)
-                                   
+             # ---
+
              # --- AI Update now returns the Vision object ---
              thrusterCommands, vision_results = self.submarineAI.update(dt, sensors)
              # ---
-             
+
              if thrusterCommands.pause_simulation: self.paused = True
              self.lastThrusterCommands = thrusterCommands
-             
-             # --- Vision Debug Drawing (UPDATED) ---
-             # Draw all detected red blobs (potential gate poles)
-             for pole in vision_results.red_blobs:
-                  pygame.draw.rect(self.cameraSurface, ORANGE, 
+
+             # --- MODIFIED: Vision Debug Drawing for (front_vision, side_vision) tuple ---
+             # vision_results is now a tuple: (front_vision, side_vision)
+             # We draw debug info from the front_vision (index 0)
+             front_vision = vision_results[0]
+             side_vision = vision_results[1] # For side camera debug
+
+             # Draw all detected red blobs (potential gate poles) on front camera
+             for pole in front_vision.red_blobs:
+                  pygame.draw.rect(self.cameraSurface, ORANGE,
                                    (pole['min_x'], pole['min_y'], pole['width'], pole['height']), 1)
 
-             # If a gate pair was identified, draw a box around it
-             gate_pair = vision_results.get_gate_pair()
+             # If a gate pair was identified, draw a box around it on front camera
+             gate_pair = front_vision.get_gate_pair()
              if gate_pair:
                  left_pole, right_pole = gate_pair
                  min_x = left_pole['min_x']
@@ -404,22 +413,29 @@ class SubmarineSimulator:
                  max_y = max(left_pole['max_y'], right_pole['max_y'])
                  pygame.draw.rect(self.cameraSurface, YELLOW, (min_x, min_y, max_x - min_x, max_y - min_y), 1)
 
-             # If a single best green pole was identified, draw a box around it
-             best_pole = vision_results.get_best_pole()
+             # If a single best green pole was identified, draw a box around it on front camera
+             best_pole = front_vision.get_best_pole()
              if best_pole:
-                  pygame.draw.rect(self.cameraSurface, GREEN, 
+                  pygame.draw.rect(self.cameraSurface, GREEN,
                                    (best_pole['min_x'], best_pole['min_y'], best_pole['width'], best_pole['height']), 2)
 
-             # Remove old debug drawings based on deprecated VisionData fields
-             # for pole in vision_data.visible_poles: ...
-             # for pole in vision_data.selected_slalom_poles: ...
-             # for pole in vision_data.avoidance_poles: ...
+             # --- ADDED: Debug drawing for side camera (YELLOW rectangle) ---
+             best_side_pole = side_vision.get_best_pole_side()
+             if best_side_pole:
+                 pygame.draw.rect(self.sideCameraSurface, YELLOW, # Draw yellow rectangle
+                                  (best_side_pole['min_x'], best_side_pole['min_y'],
+                                   best_side_pole['width'], best_side_pole['height']), 2)
+                 # Optionally draw center circle
+                 # center_x = int(best_side_pole['center_x'])
+                 # center_y = int(best_side_pole['center_y'])
+                 # pygame.draw.circle(self.sideCameraSurface, YELLOW, (center_x, center_y), 5)
+             # ---
              # --- END Vision Debug Drawing Update ---
-             
+
              # Apply physics
              self.applyPhysics(dt, thrusterCommands)
-             
+
              # Render final frame
              self.render()
-             
+
         pygame.quit()
