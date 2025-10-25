@@ -213,10 +213,27 @@ class SubmarineSimulator:
              if lp_top and lp_bot: avg_dist = (lp_top[2] + lp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, lp_top[:2], lp_bot[:2], 5))
              rp_top = self.project3D((g.x, g.center_y + half_w, pole_z_top)); rp_bot = self.project3D((g.x, g.center_y + half_w, pole_z_bottom))
              if rp_top and rp_bot: avg_dist = (rp_top[2] + rp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, rp_top[:2], rp_bot[:2], 5))
+        
+        # --- MODIFIED: Dynamic width for front camera ---
         if self.prequal_marker:
-             # Marker pole drawing logic (unchanged)
-             m = self.prequal_marker; tp = self.project3D((m.x, m.y, m.z_top)); bp = self.project3D((m.x, m.y, m.z_bottom))
-             if tp and bp: avg_dist = (tp[2] + bp[2]) / 2; drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], 8))
+             m = self.prequal_marker
+             tp = self.project3D((m.x, m.y, m.z_top))
+             bp = self.project3D((m.x, m.y, m.z_bottom))
+             
+             if tp and bp:
+                 dist = (tp[2] + bp[2]) / 2.0 # Average distance to pole
+                 if dist < 0.1: dist = 0.1 # Avoid division by zero
+                 
+                 w,h = self.cameraSurface.get_size()
+                 f = w/(2*math.tan(math.radians(self.config.cameraFov/2)))
+                 
+                 # Apparent width = focal_length * (world_width / world_distance)
+                 pixel_width = int(f * (m.radius * 2) / dist)
+                 pixel_width = max(2, pixel_width) # At least 2px wide
+                 
+                 avg_dist = dist # Already calculated
+                 drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], pixel_width))
+        # ---
              
         drawable.sort(key=lambda x: x[0], reverse=True)
         for d in drawable:
@@ -254,11 +271,28 @@ class SubmarineSimulator:
              # --- MODIFIED: Use project3DSide ---
              rp_top = self.project3DSide((g.x, g.center_y + half_w, pole_z_top)); rp_bot = self.project3DSide((g.x, g.center_y + half_w, pole_z_bottom))
              if rp_top and rp_bot: avg_dist = (rp_top[2] + rp_bot[2]) / 2; drawable.append((avg_dist, 'line', pole_color, rp_top[:2], rp_bot[:2], 5))
+        
+        # --- MODIFIED: Dynamic width for side camera ---
         if self.prequal_marker:
              m = self.prequal_marker
-             # --- MODIFIED: Use project3DSide ---
-             tp = self.project3DSide((m.x, m.y, m.z_top)); bp = self.project3DSide((m.x, m.y, m.z_bottom))
-             if tp and bp: avg_dist = (tp[2] + bp[2]) / 2; drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], 8))
+             tp = self.project3DSide((m.x, m.y, m.z_top))
+             bp = self.project3DSide((m.x, m.y, m.z_bottom))
+
+             if tp and bp:
+                 dist = (tp[2] + bp[2]) / 2.0 # Average distance to pole
+                 if dist < 0.1: dist = 0.1 # Avoid division by zero
+                 
+                 # Use the side camera's surface and FOV
+                 w,h = self.sideCameraSurface.get_size()
+                 f = w/(2*math.tan(math.radians(self.config.cameraFov/2)))
+                 
+                 # Apparent width = focal_length * (world_width / world_distance)
+                 pixel_width = int(f * (m.radius * 2) / dist)
+                 pixel_width = max(2, pixel_width) # At least 2px wide
+                 
+                 avg_dist = dist # Already calculated
+                 drawable.append((avg_dist, 'line', m.color, tp[:2], bp[:2], pixel_width))
+        # ---
              
         drawable.sort(key=lambda x: x[0], reverse=True)
         for d in drawable:
