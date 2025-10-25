@@ -3,4 +3,4 @@ ai/tasks/__pycache__/
 __pycache__/
 *.pyc
 __pycache__/simulator.cpython-312.pyc
-.DS
+.DS_Store
