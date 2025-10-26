@@ -50,12 +50,12 @@ if __name__ == "__main__":
         # 5. Orbit using side camera until gate is spotted in front camera
         OrbitUsingSideCamera(
             target_pole_width_px=40,    # Target distance (40px wide). Tune this!
-            orbit_surge_power=0.05,     # Keep reduced surge power
-            yaw_x_gain=0.015,            # Positive gain for centering. Tune this!
-            yaw_dist_p_gain=-0.3,       # Keep reduced magnitude negative distance P-gain. Tune this!
+            orbit_surge_power=0.25,     # Was 0.05
+            yaw_x_gain=0.025,            # Positive gain for centering. Was 0.015
+            yaw_dist_p_gain=-0.3,       # Was -0.3
             # --- ADDED: Integral gain for distance ---
-            yaw_dist_i_gain=-0.5,      # Small negative I-gain. Tune this!
-            integral_clamp = 1.0
+            yaw_dist_i_gain=-1.3,      # Was -0.5
+            integral_clamp = 2.5    ,    # Was 1.0 
             # completion_gate_tolerance_px is no longer used
         )
     ]
